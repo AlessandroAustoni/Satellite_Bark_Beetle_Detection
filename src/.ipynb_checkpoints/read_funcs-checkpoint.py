@@ -393,3 +393,76 @@ def band_pairing(to_pair,aerial_bands,wl_prs,wl_prs_reduced):
     return mean_array
 
 
+
+def compute_index(ref,index,wave):
+    if index=='CLRE':
+        b790=ref[:,:,find_nearest(wave,780)]
+        b705=ref[:,:,find_nearest(wave,705)]
+        index_map=np.divide(b790,b705)
+        index_map=index_map**(-1)
+    elif index=='GNDVI':
+        b545=ref[:,:,find_nearest(wave,545)]
+        NIR=ref[:,:,find_nearest(wave,800)]
+        index_map=(NIR-b545)/(NIR+b545)
+    elif index=='NBRI':
+        SWIR1=ref[:,:,find_nearest(wave,1500)]
+        SWIR2=ref[:,:,find_nearest(wave,1959)]
+        SWIR3=ref[:,:,find_nearest(wave,2400)]
+        SWIR=np.dstack((SWIR1,SWIR2))
+        SWIR=np.dstack((SWIR,SWIR3))
+        SWIR=np.mean(SWIR,axis=2)
+        NIR=ref[:,:,find_nearest(wave,800)]
+        index_map=(NIR-SWIR)/(NIR+SWIR)
+    elif index=='NDREI':
+        rededge=ref[:,:,find_nearest(wave,710)]
+        NIR=ref[:,:,find_nearest(wave,800)]
+        index_map=(NIR-rededge)/(NIR+rededge)
+    elif index=='NDVI':
+        NIR=ref[:,:,find_nearest(wave,800)]
+        red=ref[:,:,find_nearest(wave,640)]
+        index_map=(NIR-red)/(NIR+red)
+    elif index=='NRVI':
+        red=ref[:,:,find_nearest(wave,640)]
+        NIR=ref[:,:,find_nearest(wave,800)]
+        RVI=NIR/red
+        index_map=(RVI-1)/(RVI+1)
+    elif index=='REIP':
+        b670=ref[:,:,find_nearest(wave,670)]
+        b700=ref[:,:,find_nearest(wave,700)]
+        b740=ref[:,:,find_nearest(wave,740)]
+        b780=ref[:,:,find_nearest(wave,780)]
+        num=((b670+b780)/2)-b700
+        den=b740-b700
+        var=num/den
+        index_map=700+40*var
+    elif index=='REIP2':
+        b667=ref[:,:,find_nearest(wave,667)]
+        b702=ref[:,:,find_nearest(wave,702)]
+        b742=ref[:,:,find_nearest(wave,742)]
+        b782=ref[:,:,find_nearest(wave,782)]
+        num=((b667+b782)/2)-b702
+        den=b742-b702
+        var=num/den
+        index_map=702+40*var
+    elif index=='REIP3':
+        b665=ref[:,:,find_nearest(wave,665)]
+        b705=ref[:,:,find_nearest(wave,705)]
+        b740=ref[:,:,find_nearest(wave,740)]
+        b783=ref[:,:,find_nearest(wave,783)]
+        num=((b665+b783)/2)-b705
+        den=b740-b705
+        var=num/den
+        index_map=705+45*var
+    elif index=='SLAVI':
+        red=ref[:,:,find_nearest(wave,640)]
+        NIR=ref[:,:,find_nearest(wave,800)]
+        SWIR1=ref[:,:,find_nearest(wave,1500)]
+        SWIR2=ref[:,:,find_nearest(wave,1959)]
+        SWIR3=ref[:,:,find_nearest(wave,2400)]
+        SWIR=np.dstack((SWIR1,SWIR2))
+        SWIR=np.dstack((SWIR,SWIR3))
+        SWIR=np.mean(SWIR,axis=2)
+        index_map=(NIR)/(red+SWIR)
+    else:
+        raise Exception('Please, insert a valid vegetation index name!')
+    return index_map
