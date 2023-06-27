@@ -2,7 +2,7 @@ import numpy as np
 import h5py
 from skimage import data, draw, io
 import matplotlib.pyplot as plt
-from img_list import prs_list,snt_list
+from img_list import prs_list
 from PIL import Image
 import tifffile as tiff
 from find_nearest import find_nearest
@@ -400,32 +400,38 @@ def compute_index(ref,index,wave):
         b705=ref[:,:,find_nearest(wave,705)]
         index_map=np.divide(b790,b705)
         index_map=index_map**(-1)
+        threshold=0.44
     elif index=='GNDVI':
         b545=ref[:,:,find_nearest(wave,545)]
         NIR=ref[:,:,find_nearest(wave,800)]
         index_map=(NIR-b545)/(NIR+b545)
+        threshold=0.64
     elif index=='NBRI':
         SWIR1=ref[:,:,find_nearest(wave,1500)]
-        SWIR2=ref[:,:,find_nearest(wave,1959)]
+        SWIR2=ref[:,:,find_nearest(wave,1950)]
         SWIR3=ref[:,:,find_nearest(wave,2400)]
         SWIR=np.dstack((SWIR1,SWIR2))
         SWIR=np.dstack((SWIR,SWIR3))
         SWIR=np.mean(SWIR,axis=2)
         NIR=ref[:,:,find_nearest(wave,800)]
         index_map=(NIR-SWIR)/(NIR+SWIR)
+        threshold=0.44
     elif index=='NDREI':
         rededge=ref[:,:,find_nearest(wave,710)]
         NIR=ref[:,:,find_nearest(wave,800)]
         index_map=(NIR-rededge)/(NIR+rededge)
+        threshold=0.4
     elif index=='NDVI':
         NIR=ref[:,:,find_nearest(wave,800)]
         red=ref[:,:,find_nearest(wave,640)]
         index_map=(NIR-red)/(NIR+red)
+        threshold=0.65
     elif index=='NRVI':
         red=ref[:,:,find_nearest(wave,640)]
         NIR=ref[:,:,find_nearest(wave,800)]
         RVI=NIR/red
         index_map=(RVI-1)/(RVI+1)
+        threshold=0.64
     elif index=='REIP':
         b670=ref[:,:,find_nearest(wave,670)]
         b700=ref[:,:,find_nearest(wave,700)]
@@ -457,12 +463,58 @@ def compute_index(ref,index,wave):
         red=ref[:,:,find_nearest(wave,640)]
         NIR=ref[:,:,find_nearest(wave,800)]
         SWIR1=ref[:,:,find_nearest(wave,1500)]
-        SWIR2=ref[:,:,find_nearest(wave,1959)]
+        SWIR2=ref[:,:,find_nearest(wave,1950)]
         SWIR3=ref[:,:,find_nearest(wave,2400)]
         SWIR=np.dstack((SWIR1,SWIR2))
         SWIR=np.dstack((SWIR,SWIR3))
         SWIR=np.mean(SWIR,axis=2)
         index_map=(NIR)/(red+SWIR)
+        threshold=1.7
     else:
         raise Exception('Please, insert a valid vegetation index name!')
-    return index_map
+    return index_map,threshold
+
+def savenpastiff(filename,cube,path,name):
+    pf = h5py.File(path+filename+'.he5','r')
+
+    # Read wavelengths, drop zero ones and overlap
+    attrs = pf.attrs
+    data = pf['HDFEOS']['SWATHS']['PRS_L2D_HCO']
+
+    # Read geographical information
+    lat = np.array(data['Geolocation Fields']['Latitude'][:])
+    lon = np.array(data['Geolocation Fields']['Longitude'][:])
+    #Here starts the tiff conversion
+    #get minimum and maximum latitude and longitude
+    xmin,ymin,xmax,ymax = [lon.min(),lat.min(),lon.max(),lat.max()]
+
+    #get pixel spatial resolution
+    xres = (xmax-xmin)/lat.shape[1]#lat.shape[1] gives the number of cols
+    yres = (ymax-ymin)/lat.shape[0]#lat.shape[0] gives the number of rows
+
+    #define coordinates
+    geotransform=(xmin,xres,0,ymax,0, -yres)#zeros (third and fifth parameters) are for rotation
+    
+    #CHECK CUBE DIMENSION
+    if cube.ndim==2:
+        thirdim=1
+    else:
+        thirdim=cube.shape[2]
+    #cube exytaction as GEOTIFF
+    #define GeoTIFF structure and output filename
+    output_raster = gdal.GetDriverByName('GTiff').Create(path+name+".tif",cube.shape[1], cube.shape[0], thirdim ,gdal.GDT_Float32)  # Open the file
+        
+    #loop over all bands and write it to the GeoTIFF
+    for b in range(1,thirdim):
+        print("converting band",b)
+        outband = output_raster.GetRasterBand(b) 
+        outband.WriteArray(cube[:,:,b])
+    #specify coordinates to WGS84 UTM32N
+    output_raster.SetGeoTransform(geotransform)  
+    srs = osr.SpatialReference()                 
+    srs.ImportFromEPSG(32632)                                                               
+    output_raster.SetProjection(srs.ExportToWkt())
+
+    #clean memory     
+    output_raster.FlushCache()
+    return
